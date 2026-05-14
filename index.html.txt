@@ -1,0 +1,126 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>私人多AI协作助手</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:system-ui,-apple-system,sans-serif}
+body{background:#12141d;color:#eee;padding:15px}
+.container{max-width:1200px;margin:0 auto}
+.header{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:15px}
+input,select,button{padding:8px 12px;border-radius:6px;border:none;font-size:14px}
+input{background:#1e2130;color:#fff;border:1px solid #333}
+button{background:#3671e9;color:#fff;cursor:pointer}
+button:hover{background:#285cd0}
+.box{background:#1e2130;border-radius:8px;padding:15px;margin-bottom:15px}
+.agent-item{display:flex;gap:10px;align-items:center;margin:8px 0}
+.chat-area{height:450px;overflow:auto;border:1px solid #333;border-radius:6px;padding:10px;margin:10px 0}
+.msg{margin:6px 0;padding:8px;border-radius:6px}
+.user-msg{background:#253452}
+.ai-msg{background:#2c2f3f}
+</style>
+</head>
+<body>
+<div class="container">
+  <h2>私人专属多AI协作系统</h2>
+  <div class="header">
+    <input type="text" id="apiKey" placeholder="填写你的API密钥">
+    <select id="modelType">
+      <option value="deepseek">DeepSeek</option>
+      <option value="doubao">豆包</option>
+      <option value="gpt">OpenAI</option>
+    </select>
+    <button onclick="addAgent()">添加AI角色</button>
+    <button onclick="clearChat()">清空对话</button>
+  </div>
+
+  <div class="box">
+    <h4>已创建AI角色</h4>
+    <div id="agentList"></div>
+  </div>
+
+  <div class="box">
+    <div class="chat-area" id="chatBox"></div>
+    <div style="display:flex;gap:10px;margin-top:10px">
+      <input style="flex:1" type="text" id="userInput" placeholder="输入任务指令..." onkeydown="if(event.key===13)sendTask()">
+      <button onclick="sendTask()">下发任务</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let agents = [];
+function addAgent(){
+  let name = prompt("输入AI角色名称","总编");
+  let prompt = prompt("输入角色设定","统筹全局，分配任务，把控剧情");
+  if(!name||!prompt)return;
+  agents.push({name,prompt});
+  renderAgent();
+}
+function renderAgent(){
+  let html = "";
+  agents.forEach((item,idx)=>{
+    html += `<div class="agent-item">
+      <span>${item.name}</span>
+      <span style="color:#999;font-size:12px">${item.prompt}</span>
+      <button onclick="delAgent(${idx})" style="background:#e53935;padding:4px 8px;font-size:12px">删除</button>
+    </div>`
+  })
+  document.getElementById("agentList").innerHTML = html;
+}
+function delAgent(idx){agents.splice(idx,1);renderAgent()}
+function clearChat(){document.getElementById("chatBox").innerHTML=""}
+
+async function sendTask(){
+  let key = document.getElementById("apiKey").value;
+  let task = document.getElementById("userInput").value.trim();
+  let model = document.getElementById("modelType").value;
+  if(!key||!task||agents.length===0)return alert("请填写密钥、任务、添加AI角色");
+  let chat = document.getElementById("chatBox");
+  chat.innerHTML += `<div class="msg user-msg">用户：${task}</div>`;
+  document.getElementById("userInput").value="";
+
+  for(let ai of agents){
+    chat.innerHTML += `<div class="msg ai-msg">【${ai.name}】正在处理中...</div>`;
+    let res = await fetchAi(key,model,task,ai.prompt);
+    chat.innerHTML += `<div class="msg ai-msg">【${ai.name}】：${res}</div>`;
+    chat.scrollTop = chat.scrollHeight;
+  }
+}
+
+async function fetchAi(apikey,model,task,prompt){
+  let url="";
+  let reqBody={model:"",messages:[]};
+  if(model==="deepseek"){
+    url="https://api.deepseek.com/v1/chat/completions";
+    reqBody.model="deepseek-chat";
+  }else if(model==="doubao"){
+    url="https://ark.cn-beijing.volces.com/api/v3/chat/completions";
+    reqBody.model="doubao-pro";
+  }else{
+    url="https://api.openai.com/v1/chat/completions";
+    reqBody.model="gpt-3.5-turbo";
+  }
+  reqBody.messages=[
+    {role:"system",content:prompt},
+    {role:"user",content:task}
+  ];
+  try{
+    let res = await fetch(url,{
+      method:"POST",
+      headers:{
+        "Authorization":`Bearer ${apikey}`,
+        "Content-Type":"application/json"
+      },
+      body:JSON.stringify(reqBody)
+    })
+    let data = await res.json();
+    return data.choices?.[0]?.message?.content || "请求异常";
+  }catch(e){
+    return "接口请求失败，请检查密钥与网络";
+  }
+}
+</script>
+</body>
+</html>
